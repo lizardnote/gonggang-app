@@ -19,8 +19,6 @@ export default function Home() {
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [selected, setSelected] = useState<Recommendation | null>(null);
-  const [note, setNote] = useState("");
-  const [logged, setLogged] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
@@ -37,18 +35,15 @@ export default function Home() {
     const results = recommend(remainingTime, currentZone, nextZone, activity);
     setRecommendations(results);
     setSelected(null);
-    setNote("");
-    setLogged(false);
     setStep("result");
   }
 
   function handleChoose(rec: Recommendation) {
+    if (selected?.location.id === rec.location.id) {
+      setSelected(null);
+      return;
+    }
     setSelected(rec);
-    setLogged(false);
-  }
-
-  function handleConfirmLog() {
-    if (!selected) return;
     appendLog({
       timestamp: new Date().toISOString(),
       remainingTime,
@@ -56,10 +51,12 @@ export default function Home() {
       nextBuilding,
       activity,
       recommended: recommendations.map((r) => r.location.name),
-      chosen: selected.location.name,
-      note,
+      chosen: rec.location.name,
     });
-    setLogged(true);
+  }
+
+  function mapUrl(name: string) {
+    return `https://map.kakao.com/link/search/${encodeURIComponent(`${name} 성균관대`)}`;
   }
 
   function openLog() {
@@ -232,14 +229,33 @@ export default function Home() {
                     onClick={() => handleChoose(rec)}
                     className={`mt-3 w-full rounded-xl py-2.5 text-sm font-semibold transition ${
                       selected?.location.id === rec.location.id
-                        ? "bg-stone-900 text-white"
+                        ? "bg-emerald-600 text-white"
                         : "bg-stone-100 text-stone-700 hover:bg-stone-200"
                     }`}
                   >
                     {selected?.location.id === rec.location.id
-                      ? "선택함"
+                      ? "여기로 갈게요 ✅"
                       : "여기서 시간 보낼래요"}
                   </button>
+
+                  {selected?.location.id === rec.location.id && (
+                    <div className="mt-2 flex items-center gap-3 text-sm">
+                      <a
+                        href={mapUrl(rec.location.name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 rounded-xl border border-emerald-600 py-2 text-center font-semibold text-emerald-700"
+                      >
+                        지도에서 길찾기 🧭
+                      </a>
+                      <button
+                        onClick={() => setSelected(null)}
+                        className="text-xs text-stone-400 underline underline-offset-2"
+                      >
+                        다른 곳도 볼래요
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {recommendations.length === 0 && (
@@ -248,33 +264,6 @@ export default function Home() {
                 </p>
               )}
             </div>
-
-            {selected && !logged && (
-              <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                <div className="text-sm font-semibold">
-                  왜 이걸 골랐어요? (인터뷰용 메모, 선택)
-                </div>
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="예: 시간 딱 맞아서 / 평소 자주 가던 곳이라"
-                  className="mt-2 w-full rounded-xl border border-stone-200 p-3 text-sm outline-none focus:border-stone-400"
-                  rows={2}
-                />
-                <button
-                  onClick={handleConfirmLog}
-                  className="mt-2 w-full rounded-xl bg-stone-900 py-2.5 text-sm font-semibold text-white"
-                >
-                  기록하기
-                </button>
-              </div>
-            )}
-
-            {logged && (
-              <div className="rounded-2xl bg-emerald-50 p-4 text-center text-sm text-emerald-700">
-                기록했어요! 🙌 다른 조건으로도 한번 테스트해볼까요?
-              </div>
-            )}
 
             <button
               onClick={() => setStep("input")}

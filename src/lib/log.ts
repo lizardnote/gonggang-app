@@ -6,7 +6,7 @@ export interface LogEntry {
   activity: string;
   recommended: string[];
   chosen: string;
-  note: string;
+  note?: string;
 }
 
 const KEY = "gonggang_log";
