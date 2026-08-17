@@ -11,6 +11,8 @@ export interface Location {
   duration: number;
   emoji: string;
   desc: string;
+  cost?: string | null;
+  hours?: string | null;
 }
 
 export interface Recommendation {

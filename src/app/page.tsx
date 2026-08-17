@@ -219,6 +219,13 @@ export default function Home() {
                         </Badge>
                       </div>
                       <p className="mt-2 text-xs text-stone-400">{rec.reason}</p>
+                      {(rec.location.cost || rec.location.hours) && (
+                        <p className="mt-1 text-xs text-stone-400">
+                          {rec.location.cost && <span>{rec.location.cost}</span>}
+                          {rec.location.cost && rec.location.hours && <span> · </span>}
+                          {rec.location.hours && <span>{rec.location.hours}</span>}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <button
