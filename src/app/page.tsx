@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { BUILDINGS } from "@/data/zones";
 import { Activity, Recommendation, recommend } from "@/lib/recommend";
-import { appendLog, clearLogs, getLogs, LogEntry } from "@/lib/log";
+import { appendLog, fetchLogs, LogEntry } from "@/lib/log";
 
 const TIME_OPTIONS = [30, 45, 60, 90, 120];
 const ACTIVITIES: Activity[] = ["전체", "공부", "식사", "휴식", "산책"];
@@ -21,6 +21,8 @@ export default function Home() {
   const [selected, setSelected] = useState<Recommendation | null>(null);
   const [showLog, setShowLog] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logSource, setLogSource] = useState<"remote" | "local">("local");
+  const [logLoading, setLogLoading] = useState(false);
 
   const currentZone = useMemo(
     () => BUILDINGS.find((b) => b.name === currentBuilding)!.zone,
@@ -59,13 +61,18 @@ export default function Home() {
     return `https://map.kakao.com/link/search/${encodeURIComponent(`${name} 성균관대`)}`;
   }
 
-  function openLog() {
-    setLogs(getLogs());
+  async function openLog() {
     setShowLog(true);
+    setLogLoading(true);
+    const { logs: fetched, source } = await fetchLogs();
+    setLogs(fetched);
+    setLogSource(source);
+    setLogLoading(false);
   }
 
   async function copyLog() {
-    const text = JSON.stringify(getLogs(), null, 2);
+    const { logs: fetched } = await fetchLogs();
+    const text = JSON.stringify(fetched, null, 2);
     try {
       await navigator.clipboard.writeText(text);
       alert("복사했어요. 노션이나 시트에 붙여넣으면 돼요.");
@@ -298,8 +305,15 @@ export default function Home() {
                   닫기
                 </button>
               </div>
+              <p className="mt-1 text-xs text-stone-400">
+                {logLoading
+                  ? "불러오는 중..."
+                  : logSource === "remote"
+                  ? "☁️ 팀 전체 데이터(Supabase)"
+                  : "⚠️ 이 기기에만 저장된 데이터 (서버 연결 안 됨)"}
+              </p>
               <div className="mt-3 flex flex-col gap-2">
-                {logs.length === 0 && (
+                {!logLoading && logs.length === 0 && (
                   <p className="text-sm text-stone-400">아직 기록이 없어요.</p>
                 )}
                 {logs.map((l, i) => (
@@ -319,15 +333,6 @@ export default function Home() {
                   className="flex-1 rounded-xl bg-stone-900 py-2.5 text-sm font-semibold text-white"
                 >
                   복사하기
-                </button>
-                <button
-                  onClick={() => {
-                    clearLogs();
-                    setLogs([]);
-                  }}
-                  className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-600"
-                >
-                  초기화
                 </button>
               </div>
             </div>
