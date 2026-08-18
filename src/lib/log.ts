@@ -8,6 +8,9 @@ export interface LogEntry {
   activity: string;
   recommended: string[];
   chosen: string;
+  rejectReason?: string;
+  decisionMs?: number;
+  externalSearch?: boolean;
   note?: string;
 }
 
@@ -27,6 +30,9 @@ export async function appendLog(entry: LogEntry) {
       activity: entry.activity,
       recommended: entry.recommended,
       chosen: entry.chosen,
+      reject_reason: entry.rejectReason ?? null,
+      decision_ms: entry.decisionMs ?? null,
+      external_search: entry.externalSearch ?? false,
     });
   } catch {
     // 오프라인 등으로 실패해도 로컬 기록은 이미 남아있음
@@ -62,6 +68,9 @@ export async function fetchLogs(): Promise<{ logs: LogEntry[]; source: "remote" 
           activity: row.activity,
           recommended: row.recommended ?? [],
           chosen: row.chosen,
+          rejectReason: row.reject_reason ?? undefined,
+          decisionMs: row.decision_ms ?? undefined,
+          externalSearch: row.external_search ?? undefined,
         })),
       };
     }

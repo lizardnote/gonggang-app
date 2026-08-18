@@ -1,17 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BUILDINGS } from "@/data/zones";
 import { Activity, Recommendation, recommend } from "@/lib/recommend";
 import { appendLog, fetchLogs, LogEntry } from "@/lib/log";
 
 const TIME_OPTIONS = [30, 45, 60, 90, 120];
 const ACTIVITIES: Activity[] = ["전체", "공부", "식사", "휴식", "산책"];
+const REJECT_REASONS = ["너무 멀어요", "장소가 맘에 안 들어요", "기타"];
 
 type Step = "intro" | "input" | "result";
 
 export default function Home() {
+  // 데모 영상용 버전 토글: ?v=1, ?v=2, 기본(파라미터 없음)=v3
+  const [version, setVersion] = useState<1 | 2 | 3>(3);
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get("v");
+    // URL은 서버 렌더링 시점엔 알 수 없는 외부 상태라 마운트 후에만 읽을 수 있음
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (v === "1" || v === "2") setVersion(Number(v) as 1 | 2);
+  }, []);
+
   const [step, setStep] = useState<Step>("intro");
+  const [decisionStart, setDecisionStart] = useState<number | null>(null);
   const [remainingTime, setRemainingTime] = useState(60);
   const [currentBuilding, setCurrentBuilding] = useState(BUILDINGS[0].name);
   const [nextBuilding, setNextBuilding] = useState(BUILDINGS[3].name);
@@ -19,6 +30,7 @@ export default function Home() {
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [selected, setSelected] = useState<Recommendation | null>(null);
+  const [showReject, setShowReject] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logSource, setLogSource] = useState<"remote" | "local">("local");
@@ -38,6 +50,7 @@ export default function Home() {
     setRecommendations(results);
     setSelected(null);
     setStep("result");
+    setDecisionStart(new Date().getTime());
   }
 
   function handleChoose(rec: Recommendation) {
@@ -54,11 +67,46 @@ export default function Home() {
       activity,
       recommended: recommendations.map((r) => r.location.name),
       chosen: rec.location.name,
+      decisionMs: decisionStart ? new Date().getTime() - decisionStart : undefined,
     });
+  }
+
+  function handleReject(reason: string) {
+    appendLog({
+      timestamp: new Date().toISOString(),
+      remainingTime,
+      currentBuilding,
+      nextBuilding,
+      activity,
+      recommended: recommendations.map((r) => r.location.name),
+      chosen: "",
+      rejectReason: reason,
+      decisionMs: decisionStart ? new Date().getTime() - decisionStart : undefined,
+    });
+    setShowReject(false);
   }
 
   function mapUrl(name: string) {
     return `https://map.kakao.com/link/search/${encodeURIComponent(`${name} 성균관대`)}`;
+  }
+
+  async function handleShare(rec: Recommendation) {
+    const text = `${rec.location.name}${rec.location.desc ? " - " + rec.location.desc : ""}`;
+    const url = mapUrl(rec.location.name);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "공강 추천", text, url });
+      } catch {
+        // 공유 취소 등은 무시
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      alert("링크를 복사했어요. 친구에게 붙여넣어 보내보세요!");
+    } catch {
+      alert("공유에 실패했어요.");
+    }
   }
 
   async function openLog() {
@@ -126,33 +174,37 @@ export default function Home() {
               </div>
             </Field>
 
-            <Field label="지금 어디에 있어요?">
-              <select
-                value={currentBuilding}
-                onChange={(e) => setCurrentBuilding(e.target.value)}
-                className={selectClass}
-              >
-                {BUILDINGS.map((b) => (
-                  <option key={b.name} value={b.name}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {version >= 2 && (
+              <Field label="지금 어디에 있어요?">
+                <select
+                  value={currentBuilding}
+                  onChange={(e) => setCurrentBuilding(e.target.value)}
+                  className={selectClass}
+                >
+                  {BUILDINGS.map((b) => (
+                    <option key={b.name} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
 
-            <Field label="다음 수업은 어디예요?">
-              <select
-                value={nextBuilding}
-                onChange={(e) => setNextBuilding(e.target.value)}
-                className={selectClass}
-              >
-                {BUILDINGS.map((b) => (
-                  <option key={b.name} value={b.name}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {version >= 2 && (
+              <Field label="다음 수업은 어디예요?">
+                <select
+                  value={nextBuilding}
+                  onChange={(e) => setNextBuilding(e.target.value)}
+                  className={selectClass}
+                >
+                  {BUILDINGS.map((b) => (
+                    <option key={b.name} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
 
             <Field label="뭐 하고 싶어요?">
               <div className="grid grid-cols-3 gap-2">
@@ -214,7 +266,7 @@ export default function Home() {
                         {rec.location.desc}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                        <Badge>이동 {rec.travelIn}분</Badge>
+                        {version >= 2 && <Badge>이동 {rec.travelIn}분</Badge>}
                         <Badge>활동 {rec.location.duration}분</Badge>
                         <Badge tone={rec.tight ? "warn" : "ok"}>
                           {rec.tight
@@ -223,7 +275,7 @@ export default function Home() {
                         </Badge>
                       </div>
                       <p className="mt-2 text-xs text-stone-400">{rec.reason}</p>
-                      {(rec.location.cost || rec.location.hours) && (
+                      {version >= 3 && (rec.location.cost || rec.location.hours) && (
                         <p className="mt-1 text-xs text-stone-400">
                           {rec.location.cost && <span>{rec.location.cost}</span>}
                           {rec.location.cost && rec.location.hours && <span> · </span>}
@@ -247,19 +299,33 @@ export default function Home() {
 
                   {selected?.location.id === rec.location.id && (
                     <div className="mt-2 flex items-center gap-3 text-sm">
-                      <a
-                        href={mapUrl(rec.location.name)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 rounded-xl border border-emerald-600 py-2 text-center font-semibold text-emerald-700"
-                      >
-                        지도에서 길찾기 🧭
-                      </a>
+                      {version >= 3 && (
+                        <a
+                          href={mapUrl(rec.location.name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() =>
+                            appendLog({
+                              timestamp: new Date().toISOString(),
+                              remainingTime,
+                              currentBuilding,
+                              nextBuilding,
+                              activity,
+                              recommended: recommendations.map((r) => r.location.name),
+                              chosen: rec.location.name,
+                              externalSearch: true,
+                            })
+                          }
+                          className="flex-1 rounded-xl border border-emerald-600 py-2 text-center font-semibold text-emerald-700"
+                        >
+                          지도에서 길찾기 🧭
+                        </a>
+                      )}
                       <button
-                        onClick={() => setSelected(null)}
+                        onClick={() => handleShare(rec)}
                         className="text-xs text-stone-400 underline underline-offset-2"
                       >
-                        다른 곳도 볼래요
+                        친구에게 공유하기
                       </button>
                     </div>
                   )}
@@ -272,11 +338,37 @@ export default function Home() {
               )}
             </div>
 
+            {version >= 2 && !selected && recommendations.length > 0 && !showReject && (
+              <button
+                onClick={() => setShowReject(true)}
+                className="text-center text-sm text-stone-400 underline underline-offset-2"
+              >
+                마음에 드는 곳이 없어요
+              </button>
+            )}
+
+            {showReject && (
+              <div className="rounded-2xl border border-stone-200 bg-white p-4">
+                <p className="text-sm font-semibold">어떤 점이 아쉬웠어요?</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {REJECT_REASONS.map((reason) => (
+                    <button
+                      key={reason}
+                      onClick={() => handleReject(reason)}
+                      className="rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
               onClick={() => setStep("input")}
               className="mt-1 w-full rounded-2xl border border-stone-200 px-6 py-3 text-sm font-semibold text-stone-600"
             >
-              다른 공강도 찾아보기
+              다른 곳도 볼래요
             </button>
           </div>
         )}
@@ -318,12 +410,17 @@ export default function Home() {
                 )}
                 {logs.map((l, i) => (
                   <div key={i} className="rounded-xl bg-stone-50 p-3 text-xs">
-                    <div className="font-semibold">{l.chosen}</div>
+                    <div className="font-semibold">
+                      {l.chosen || `❌ 미선택 (${l.rejectReason ?? "이유 없음"})`}
+                      {l.externalSearch && " · 🔗 외부검색"}
+                    </div>
                     <div className="text-stone-400">
                       {l.currentBuilding} → {l.nextBuilding} / {l.remainingTime}분 /{" "}
                       {l.activity}
+                      {typeof l.decisionMs === "number" &&
+                        ` / 결정 ${Math.round(l.decisionMs / 1000)}초`}
                     </div>
-                    {l.note && <div className="mt-1 text-stone-600">"{l.note}"</div>}
+                    {l.note && <div className="mt-1 text-stone-600">&ldquo;{l.note}&rdquo;</div>}
                   </div>
                 ))}
               </div>
