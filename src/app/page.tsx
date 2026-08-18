@@ -29,6 +29,7 @@ export default function Home() {
   const [activity, setActivity] = useState<Activity>("전체");
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [shownIds, setShownIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Recommendation | null>(null);
   const [showReject, setShowReject] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -48,8 +49,21 @@ export default function Home() {
   function handleSearch() {
     const results = recommend(remainingTime, currentZone, nextZone, activity);
     setRecommendations(results);
+    setShownIds(results.map((r) => r.location.id));
     setSelected(null);
     setStep("result");
+    setDecisionStart(new Date().getTime());
+  }
+
+  function handleMore() {
+    const results = recommend(remainingTime, currentZone, nextZone, activity, shownIds);
+    if (results.length === 0) {
+      alert("더 추천할 곳이 없어요. 조건을 바꿔서 다시 찾아보세요.");
+      return;
+    }
+    setRecommendations(results);
+    setShownIds((prev) => [...prev, ...results.map((r) => r.location.id)]);
+    setSelected(null);
     setDecisionStart(new Date().getTime());
   }
 
@@ -84,6 +98,7 @@ export default function Home() {
       decisionMs: decisionStart ? new Date().getTime() - decisionStart : undefined,
     });
     setShowReject(false);
+    handleMore();
   }
 
   function mapUrl(name: string) {
@@ -365,7 +380,7 @@ export default function Home() {
             )}
 
             <button
-              onClick={() => setStep("input")}
+              onClick={handleMore}
               className="mt-1 w-full rounded-2xl border border-stone-200 px-6 py-3 text-sm font-semibold text-stone-600"
             >
               다른 곳도 볼래요

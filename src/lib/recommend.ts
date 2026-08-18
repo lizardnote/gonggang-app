@@ -31,10 +31,13 @@ export function recommend(
   remainingTime: number,
   currentZone: ZoneId,
   nextZone: ZoneId,
-  activity: Activity
+  activity: Activity,
+  excludeIds: string[] = []
 ): Recommendation[] {
   const candidates = LOCATIONS.filter(
-    (loc) => activity === "전체" || loc.categories.includes(activity)
+    (loc) =>
+      (activity === "전체" || loc.categories.includes(activity)) &&
+      !excludeIds.includes(loc.id)
   );
 
   const scored: Recommendation[] = candidates.map((loc) => {
